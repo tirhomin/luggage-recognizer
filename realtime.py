@@ -30,7 +30,7 @@ PATH_TO_TEST_IMAGES_DIR = 'test_images'
 TEST_IMAGE_PATHS = [ os.path.join(PATH_TO_TEST_IMAGES_DIR, 'image{}.jpg'.format(i)) for i in range(2, 3) ]
 
 def process_frame(frame,sess):
-    image_np = )
+    image_np = frame
     image_np_expanded = np.expand_dims(image_np, axis=0)
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
     boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
