@@ -1,6 +1,6 @@
 #Installation instructions:
 
-Create a Python 3.5 virtualenv named *tirenv*, then add tensorflow and pillow:
+Create a Python 3.5 virtualenv named *tirenv* in the same directory as this repo, then add tensorflow and pillow:
 ~~~~
 pip install tensorflow pillow
 ~~~~
