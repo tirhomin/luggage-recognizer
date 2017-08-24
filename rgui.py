@@ -11,6 +11,7 @@ def load_image_into_numpy_array(image):
     return np.array(image.getdata()).reshape((im_height, im_width, 3)).astype(np.uint8)
 
 def updatethread(self):
+    '''update main image with analyzed image once analysis is complete'''
     while True:       
         print("updatethread")
         newimg = self.framequeue.get()       
@@ -109,6 +110,7 @@ class VIDEOBOX(object):
 
 
 class GUI(object):
+    '''the main GUI window'''
     def __init__(self, root):
         self.TILESIZE = 128
         thumbscale = 1.95
@@ -144,18 +146,22 @@ class GUI(object):
         self.root.destroy()
 
     def show_original(self):
+        '''show original image w/o analysis labels'''
         self.videolabel.configure(image=self.rawimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
 
     def show_analyzed(self):
+        '''show image w/ analysis labels'''
         self.videolabel.configure(image=self.tfimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
 
     def load_previous(self,num):
+        '''load a historical image as chosen from right toolbar'''
         print('LOADPREV:',num)
         path = getattr(self,'histpath'+str(num))
         print('loading histpath:',path)
         self.set_image(path)
 
     def set_image(self,fname):
+        '''set an image to the main window from a filepath to image'''
         openedimg = Image.open(fname)
         self.tque.put(load_image_into_numpy_array(openedimg))
         self.mainimg = openedimg
@@ -165,6 +171,7 @@ class GUI(object):
         self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
 
     def change_file(self):
+        '''prompt user to input new image or video file'''
         images = ['jpg','jpeg','png']
         videos = ['mp4','m4v']
         allowed_names = videos + images
@@ -204,6 +211,7 @@ class GUI(object):
             print('VIDEO INTEGRATION IN DEV')
 
     def run(self):
+        '''start the application!'''
         self.tque = Queue()#(maxsize=120)
         self.framequeue = Queue()#(maxsize=120)
         
