@@ -25,4 +25,4 @@ then simply navigate back to where rgui.py is and run
 python rgui.py
 ~~~~
 
-Current state of GUI:![Alt](https://raw.githubusercontent.com/tirhomin/luggage-recognizer/master/gui-wimage.jpg "screenshot")
+Current state of GUI:![Alt](https://raw.githubusercontent.com/tirhomin/luggage-recognizer/master/gui-wimage.jpg?raw=true "screenshot")
