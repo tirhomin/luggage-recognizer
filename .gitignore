@@ -1,3 +1,7 @@
+myenv/
 tirenv/
 __pycache__/
 *.swp	
+*.mp4
+*.m4v
+

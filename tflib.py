@@ -5,7 +5,7 @@ import numpy as np
 from collections import defaultdict
 from multiprocessing.dummy import Queue
 
-#sys.path.append("object_detection")
+sys.path.append("myenv/lib/python3.5/site-packages/tensorflow/models/object_detection")
 from utils import label_map_util
 from utils import visualization_utils as vis_util
 
@@ -45,7 +45,7 @@ def process_frame(frame,sess,detection_graph):
         line_thickness=4)
     return image_np
 
-def cvworker(que):
+def cvworker(que,gui=None):
     '''fetch frames from video file and put them into queue to send to tensorflow worker thread'''
     #cap = cv2.VideoCapture('test2.m4v')
     cap = cv2.VideoCapture('test2.mp4')
@@ -60,7 +60,7 @@ def cvworker(que):
     cap.release()
     return None
 
-def tfworker(que,framequeue):
+def tfworker(que,framequeue,gui=None):
     ''' fetch video frames from queue and send them to object detector function,
     adding the processed result to the output frames queue, to be displayed to the user'''
     s=time.time()
