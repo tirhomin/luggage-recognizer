@@ -13,15 +13,16 @@ def load_image_into_numpy_array(image):
 def updatethread(self):
     '''update main image with analyzed image once analysis is complete'''
     while True:       
-        print("updatethread")
+        #print("updatethread")
         newimg = self.framequeue.get()       
         #analyze current image:
-        self.tfimg = Image.fromarray(newimg)#np.rollaxis(newimg, 0,3))
+        #self.tfimg = Image.fromarray(newimg)#np.rollaxis(newimg, 0,3))
+        self.tfimg = newimg
         self.tfimg.thumbnail(self.VIDSIZE,Image.ANTIALIAS)
         self.tfimg = ImageTk.PhotoImage(self.tfimg)
         self.mainimg = self.tfimg
         self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
-
+        #TODO TRY MOVING JUST THE LAST STATEMENT INTO MAIN THREAD
 
 class BOTTOMBAR(object):
     ''' bottom toolbar beneath main image display'''
@@ -142,7 +143,7 @@ class GUI(object):
 
     def shutdown(self):
         '''cleanly exit threads, databases, serial ports, etc? TODO/if necessary'''
-        time.sleep(0.1)
+        #time.sleep(0.1)
         self.root.destroy()
 
     def show_original(self):
@@ -179,11 +180,13 @@ class GUI(object):
 
         fname = filedialog.askopenfilename()
         if not fname:
+            print('no file selected')
             return None
         else:
             ext = fname.split('.')[-1]
         
         if not ext.lower() in allowed_names:
+            print('unknown filetype, must be jpg, jpeg, png, mp4, or m4v')
             return None
         if ext.lower() in images:
             isimage = True
@@ -208,24 +211,43 @@ class GUI(object):
             self.histlabel3.configure(image=self.histimg3)
 
         else:
-            print('VIDEO INTEGRATION IN DEV')
+            #VIDEO
+            print('video integration in dev')
+            if self.videosupport:
+                print('video support enabled')
+                self.cvcommandqueue.put(fname)
+                print('added video file to cv command queue')
+                pass
+        
 
-    def run(self):
+    def run(self,videosupport=False,debug=False):
         '''start the application!'''
         self.tque = Queue()#(maxsize=120)
         self.framequeue = Queue()#(maxsize=120)
-        
+        self.cvcommandqueue = Queue()
+        self.videosupport = videosupport
+
+        self.cvthread = None
+        if self.videosupport:
+            self.cvthread = threading.Thread(target=tflib.cvworker,args=(self.tque,self.cvcommandqueue))
+            self.cvthread.daemon = True
+            self.cvthread.start()  
+
         self.tthread = threading.Thread(target=tflib.tfworker,args=(self.tque,self.framequeue))
         self.tthread.daemon = True
         self.tthread.start()  
 
+        #'''
         self.updatethread = threading.Thread(target=updatethread,args=(self,))
         self.updatethread.daemon = True
         self.updatethread.start()  
-
+        #'''
+        self.debug=debug
+        if self.debug:
+            self.root.after(500,self.set_image,'demo1.jpg')
         self.root.mainloop()
 #----------------------
 
 if __name__ == '__main__':
     gui = GUI(tk.Tk())
-    gui.run()
+    gui.run(videosupport=True)#,debug=True)
