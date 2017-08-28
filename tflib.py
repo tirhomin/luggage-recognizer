@@ -22,8 +22,9 @@ NUM_CLASSES = 90
 label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
 categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=NUM_CLASSES, use_display_name=True)
 category_index = label_map_util.create_category_index(categories)
+mfont = ImageFont.truetype(font='roboto.ttf', size=18)
 
-def draw_measurements(frame,boxes):
+def draw_measurements(frame, boxes, classes, scores):
     '''draw measurements on images -- just a test version / placeholder function for now'''
     '''
     draw_bounding_box_on_image(image_pil, ymin, xmin, ymax, xmax, color,
@@ -34,26 +35,34 @@ def draw_measurements(frame,boxes):
 
     draw = ImageDraw.Draw(image)
     im_width, im_height = image.size
-    font = ImageFont.load_default()
+    #font = ImageFont.load_default()
 
     # Reverse list and print from bottom to top.
-    print('boxes:',boxes)
-    for box in boxes[0]:
-        print('BOX:',box)
-        xpos = box[0] * im_width
-        ypos = box[1] * im_height
-        
-        display_str = 'measurement test'
-        text_width, text_height = font.getsize(display_str)
-        margin = np.ceil(0.05 * text_height)
-        draw.rectangle([
-                        (xpos-2*margin, ypos - text_height - 2 * margin),
-                         (xpos + text_width, ypos),
-                       ], 
-                        fill='red')
-        draw.text((xpos - margin, ypos - text_height-2), display_str, fill='white', font=font)
-        #text_bottom -= text_height - 2 * margin
-        
+    #print('boxes:',boxes)
+    labels = {1.0:'person', 27.0:'backpack', 31.0:'handbag', 33.0:'suitcase', 3.0:'car'}
+
+    for group in zip(*boxes,*classes,*scores):#boxes[0]:
+        box = group[0]
+        score = group[-1]
+        if score >= 0.5 and group[-2] in (27.0,31.0,33.0):#backpack,handbag,suitcase
+            #print('group:',group)
+            xpos = box[1] * im_width
+            ypos = box[0] * im_height
+            
+            x2pos = box[3] * im_width
+            y2pos = box[2] * im_height
+
+            display_str = 'SIZE: %.0fx%.0f CM' %(x2pos-xpos, y2pos-ypos)
+            text_width, text_height = mfont.getsize(display_str)
+            margin = np.ceil(0.05 * text_height)
+            draw.rectangle([
+                            (xpos, ypos),
+                            (xpos + text_width, ypos + text_height),
+                        ], 
+                            fill='red')
+            draw.text((xpos, ypos), display_str, fill='white', font=mfont)
+            #text_bottom -= text_height - 2 * margin
+    
     return image
 
 def process_frame(frame,sess,detection_graph):
@@ -67,6 +76,7 @@ def process_frame(frame,sess,detection_graph):
     num_detections = detection_graph.get_tensor_by_name('num_detections:0')
 
     # Actual detection.
+    #print('classes',dir(classes))
     (boxes, scores, classes, num_detections) = sess.run(
         [boxes, scores, classes, num_detections],
         feed_dict={image_tensor: image_np_expanded})
@@ -85,10 +95,13 @@ def process_frame(frame,sess,detection_graph):
         line_thickness=4)
     '''
     labels = {1.0:'person', 27.0:'backpack', 31.0:'handbag', 33.0:'suitcase', 3.0:'car'}
-    for g in zip(*boxes,*classes):
-        print('%.1f %.1f %.1f %.1f %s' %(*g[0],labels[g[-1]] if g[-1] in labels else 'unknown'))
-    '''
-    #image_np = draw_measurements(image_np,boxes)
+    #print('boxes:',boxes)
+
+    for g in zip(*boxes,*classes,*scores):
+        if g[-1]>=0.5:
+            print('%.1f %.1f %.1f %.1f %s %s' %(*g[0],labels[g[-2]] if g[-2] in labels else 'unknown', str(g[-1])))
+    #'''
+    image_np = draw_measurements(image_np,boxes,classes,scores)
     #if doing above, return image_np, not Image.fromarray as below
     return Image.fromarray(np.uint8(image_np)).convert('RGB')
 

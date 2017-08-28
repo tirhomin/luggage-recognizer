@@ -244,10 +244,10 @@ class GUI(object):
         #'''
         self.debug=debug
         if self.debug:
-            self.root.after(500,self.set_image,'demo1.jpg')
+            self.root.after(500,self.set_image,'demo5.jpg')
         self.root.mainloop()
 #----------------------
 
 if __name__ == '__main__':
     gui = GUI(tk.Tk())
-    gui.run(videosupport=True)#,debug=True)
+    gui.run(videosupport=True,debug=True)
