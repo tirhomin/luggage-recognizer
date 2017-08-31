@@ -5,7 +5,7 @@ import numpy as np
 from collections import defaultdict
 from multiprocessing.dummy import Queue
 
-sys.path.append("myenv/lib/python3.5/site-packages/tensorflow/models/object_detection")
+sys.path.append("newenv/lib/python3.6/site-packages/tensorflow/models/object_detection")
 from utils import label_map_util
 from utils import visualization_utils as vis_util
 
