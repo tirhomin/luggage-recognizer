@@ -3,4 +3,4 @@ myenv/
 tirenv/
 __pycache__/
 *.swp	
-
+lrun.sh

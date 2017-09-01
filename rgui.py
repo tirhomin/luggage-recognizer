@@ -170,6 +170,13 @@ class GUI(object):
         self.mainimg = ImageTk.PhotoImage(self.mainimg)
         self.rawimg = self.mainimg
         self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
+    def clear_queues(self):
+        for q in [self.tque,self.framequeue]:
+            q.mutex.acquire()
+            q.queue.clear()
+            q.all_tasks_done.notify_all()
+            q.unfinished_tasks = 0
+            q.mutex.release()
 
     def change_file(self):
         '''prompt user to input new image or video file'''
@@ -190,6 +197,10 @@ class GUI(object):
             return None
         if ext.lower() in images:
             isimage = True
+
+        self.clear_queues()
+        #stop adding stuff to queue
+        if self.videosupport: self.cvcommandqueue.put(0xDEAD)
 
         self.filename.set(os.path.basename(fname))
         #updatepaths to historical images
@@ -232,7 +243,6 @@ class GUI(object):
             self.cvthread = threading.Thread(target=tflib.cvworker,args=(self.tque,self.cvcommandqueue))
             self.cvthread.daemon = True
             self.cvthread.start()  
-
         self.tthread = threading.Thread(target=tflib.tfworker,args=(self.tque,self.framequeue))
         self.tthread.daemon = True
         self.tthread.start()  

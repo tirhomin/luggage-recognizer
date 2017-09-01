@@ -5,7 +5,11 @@ import numpy as np
 from collections import defaultdict
 from multiprocessing.dummy import Queue
 
+#for our OSX config
 sys.path.append("newenv/lib/python3.6/site-packages/tensorflow/models/object_detection")
+
+#for our Linux config
+#sys.path.append("newenv/lib/python3.5/site-packages/tensorflow/models/object_detection")
 from utils import label_map_util
 from utils import visualization_utils as vis_util
 
@@ -107,33 +111,29 @@ def process_frame(frame,sess,detection_graph):
 
 def cvworker(que,commandqueue,framequeue=None):
     '''fetch frames from video file and put them into queue to send to tensorflow worker thread'''
-    #cap = cv2.VideoCapture('test2.m4v')
-    cap=None
-    newfile=None
     newfile = commandqueue.get()
+    if not newfile==0xDEAD:
+        cap = cv2.VideoCapture(newfile)
+    else:
+        cap = None
 
     while True:
-        '''
         try:
-            newfile = commandqueue.get(timeout=1/60)
-            #print('newfile:',newfile)
+            newfile = commandqueue.get(timeout=1/50)
+            if newfile == 0xDEAD:
+                cap.release()
+            else:
+                cap = cv2.VideoCapture(newfile)     
         except:
             pass
-        '''
-        if newfile:
-            #print('OPENING VIDEO')
-            cap = cv2.VideoCapture(newfile)
-            newfile = None
+
         if cap and cap.isOpened():
-            #print('SENDING VIDEO TO TFQUEUE')
             ret, frame = cap.read()
             if ret:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 que.put(frame)
             else:
-                #print('DONE PROCESSING VIDEO')
                 cap.release()
-    #return None
 
 def tfworker(que,framequeue):
     ''' fetch video frames from queue and send them to object detector function,
