@@ -81,10 +81,11 @@ def process_frame(frame,sess,detection_graph):
 
     # Actual detection.
     #print('classes',dir(classes))
+    t1=time.time()
     (boxes, scores, classes, num_detections) = sess.run(
         [boxes, scores, classes, num_detections],
         feed_dict={image_tensor: image_np_expanded})
-
+    print('framtime:',time.time()-t1)
     # Visualization of the results of a detection.
     #print('BOXES:',list(zip(*boxes,*classes)))
     #print('BOXES:',list(zip(*boxes,*classes)))
@@ -109,7 +110,7 @@ def process_frame(frame,sess,detection_graph):
     #if doing above, return image_np, not Image.fromarray as below
     return Image.fromarray(np.uint8(image_np)).convert('RGB')
 
-def cvworker(que,commandqueue,framequeue=None):
+def cvworker(que,commandqueue,framequeue=None,cpulimit=False):
     '''fetch frames from video file and put them into queue to send to tensorflow worker thread'''
     newfile = commandqueue.get()
     if not newfile==0xDEAD:
@@ -118,6 +119,7 @@ def cvworker(que,commandqueue,framequeue=None):
         cap = None
 
     while True:
+        if cpulimit:time.sleep(1/30)
         try:
             newfile = commandqueue.get(timeout=1/50)
             if newfile == 0xDEAD:
@@ -135,22 +137,28 @@ def cvworker(que,commandqueue,framequeue=None):
             else:
                 cap.release()
 
-def tfworker(que,framequeue):
+def tfworker(que,framequeue,cpulimit=False):
     ''' fetch video frames from queue and send them to object detector function,
     adding the processed result to the output frames queue, to be displayed to the user'''
     s=time.time()
     detection_graph = tf.Graph()
+
     with detection_graph.as_default():
         od_graph_def = tf.GraphDef()
         with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
             serialized_graph = fid.read()
             od_graph_def.ParseFromString(serialized_graph)
             tf.import_graph_def(od_graph_def, name='')
-        sess = tf.Session(graph=detection_graph)
-    print('load time:',time.time()-s)    
+            if cpulimit:
+                config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1, \
+                                        allow_soft_placement=True, 
+                                        device_count = {'CPU': 1})
+                sess = tf.Session(graph=detection_graph,config=config)
+            else:
+                sess = tf.Session(graph=detection_graph)
 
     while True:
-        #time.sleep(0.1)#is this needed?
+        if cpulimit: time.sleep(1/30)
         frame = que.get()
         frame = process_frame(frame,sess,detection_graph)
         framequeue.put(frame)

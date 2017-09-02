@@ -231,7 +231,7 @@ class GUI(object):
                 pass
         
 
-    def run(self,videosupport=False,debug=False):
+    def run(self,videosupport=False,debug=False,cpulimit=False):
         '''start the application!'''
         self.tque = Queue()#(maxsize=120)
         self.framequeue = Queue()#(maxsize=120)
@@ -240,10 +240,10 @@ class GUI(object):
 
         self.cvthread = None
         if self.videosupport:
-            self.cvthread = threading.Thread(target=tflib.cvworker,args=(self.tque,self.cvcommandqueue))
+            self.cvthread = threading.Thread(target=tflib.cvworker,args=(self.tque,self.cvcommandqueue,cpulimit))
             self.cvthread.daemon = True
             self.cvthread.start()  
-        self.tthread = threading.Thread(target=tflib.tfworker,args=(self.tque,self.framequeue))
+        self.tthread = threading.Thread(target=tflib.tfworker,args=(self.tque,self.framequeue,cpulimit))
         self.tthread.daemon = True
         self.tthread.start()  
 
@@ -260,4 +260,4 @@ class GUI(object):
 
 if __name__ == '__main__':
     gui = GUI(tk.Tk())
-    gui.run(videosupport=True,debug=True)
+    gui.run(videosupport=True,debug=True,cpulimit=True)
