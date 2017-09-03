@@ -14,19 +14,18 @@ def updatethread(self):
     '''update main image with analyzed image once analysis is complete'''
     while True:       
         #print("updatethread")
-        image_np, boxes, classes, scores = self.framequeue.get()  
-        img = tflib.draw_measurements(image_np,boxes,classes,scores)
-        image_np = img[0] 
-        bboxes = img[1]
-        self.tfimg = Image.fromarray(np.uint8(image_np)).convert('RGB')
-        self.tfimg.thumbnail(self.VIDSIZE,Image.ANTIALIAS)
-        self.tfimg = ImageTk.PhotoImage(self.tfimg)
-        self.mainimg = self.tfimg
-        self.origimg = image_np
-        print('\n\n------------\nIDS: ',id(self.origimg), id(self.mainimg), id(self.tfimg))
-        self.bboxes = bboxes
-        self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
-        #TODO TRY MOVING JUST THE LAST STATEMENT INTO MAIN THREAD
+        if not self.paused:
+            image_np, boxes, classes, scores = self.framequeue.get()  
+            img = tflib.draw_measurements(image_np,boxes,classes,scores)
+            image_np = img[0] 
+            bboxes = img[1]
+            self.tfimg = Image.fromarray(np.uint8(image_np)).convert('RGB')
+            self.tfimg.thumbnail(self.VIDSIZE,Image.ANTIALIAS)
+            self.tfimg = ImageTk.PhotoImage(self.tfimg)
+            self.mainimg = self.tfimg
+            self.origimg = image_np
+            self.bboxes = bboxes
+            self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
 
 class BOTTOMBAR(object):
     ''' bottom toolbar beneath main image display'''
@@ -56,6 +55,12 @@ class BOTTOMBAR(object):
         self.analyzedbtn=tk.Button(self.bottombtnframe,text='show analyzed file', command=self.show_analyzed)
         self.analyzedbtn['font'] = self.bfont
         self.analyzedbtn.pack(side=tk.LEFT)
+
+        self.pausestr = tk.StringVar()
+        self.pausestr.set('pause')
+        self.pausebtn=tk.Button(self.bottombtnframe,textvariable=self.pausestr, command=self.playpause)
+        self.pausebtn['font'] = self.bfont
+        self.pausebtn.pack(side=tk.LEFT)
 
         self.fillerframe = tk.Frame(self.bottomframe,width=self.TILESIZE,height=self.TILESIZE)#, bg="#C00")
         self.fillerframe.pack(side=tk.TOP)
@@ -122,6 +127,7 @@ class GUI(object):
     def __init__(self, root):
         self.TILESIZE = 128
         thumbscale = 1.95
+        self.paused = False
         self.THUMBSIZE =  (int(self.TILESIZE*thumbscale),int(self.TILESIZE*thumbscale/1.7777777))
         self.VIDSIZE = (self.TILESIZE*5,int(self.TILESIZE*5/1.777777))
         self.root = root
@@ -161,6 +167,16 @@ class GUI(object):
     def show_analyzed(self):
         '''show image w/ analysis labels'''
         self.videolabel.configure(image=self.tfimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
+   
+    def playpause(self):
+        '''set video playing state'''
+        if self.paused:
+            self.paused = False
+            self.pausestr.set('pause')
+
+        else:
+            self.paused = True
+            self.pausestr.set('play')
 
     def load_previous(self,num):
         '''load a historical image as chosen from right toolbar'''
@@ -170,44 +186,30 @@ class GUI(object):
         self.set_image(path)
 
     def mouse_function(self,e):
-        print('EVENT:',e,e.x,e.y)
-        print('\n\n------------\nZZZIDS: ',id(self.origimg), id(self.mainimg), id(self.tfimg))
-
+        ''' when user clicks image, check mouse coords to see if it is in the bounding box for a luggage item, if so, display size '''
         if self.origimg:
             image = self.origimg
-            #MOUSE POSITION RELATIVE TO IMAGE
-            print('vs',self.VIDSIZE)
+            #GET MOUSE POSITION RELATIVE TO IMAGE
             dispwidth = self.mainimg.width() #width of scaled image on screen
             dispheight = self.mainimg.height()
             scale = image.size[0] / dispwidth
-            print('iw, dw, s', image.size[0],dispwidth,scale)
             offsetx = (self.VIDSIZE[0] - dispwidth)/2
             offsety = (self.VIDSIZE[1] - dispheight)/2
+            #rx = mouse position relative to image
             rx = e.x - offsetx
             ry = e.y - offsety
-            print('rx,ry',rx,ry,offsetx,offsety)
             rx *= scale
             ry *= scale
-            print('scaled rx,ry',rx,ry)
             
             #---------------------------
-            newimg = copy.copy(image)
+            newimg = copy.copy(image) #draw on a scaled copy of the original image, since bounding box coords are according to original dimensions
             draw = ImageDraw.Draw(newimg)
             for box in self.bboxes:
-                print('BOX:',box)
                 xpos,ypos,x2pos,y2pos = box
                 if (xpos < rx < x2pos) and (ypos < ry < y2pos):
-                    print("IN BBOX!")
                     display_str = 'SIZE: %.0fx%.0f CM' %(x2pos-xpos, y2pos-ypos)
                     text_width, text_height = self.mfont.getsize(display_str)
-                    #margin = np.ceil(0.05 * text_height)
-                    '''
-                    draw.rectangle([
-                                    (xpos, ypos),
-                                    (x2pos, y2pos),
-                                ], 
-                                    fill='#F005')
-                    '''
+                    #draw.rectangle([(xpos, ypos),(x2pos, y2pos),], fill='#F005')
                     draw.rectangle([
                             (xpos, ypos),
                             (xpos + text_width, ypos + text_height+4),

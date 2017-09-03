@@ -88,11 +88,11 @@ def process_frame(frame,sess,detection_graph):
 
     # Actual detection.
     #print('classes',dir(classes))
-    t1=time.time()
+    #t1=time.time()
     (boxes, scores, classes, num_detections) = sess.run(
         [boxes, scores, classes, num_detections],
         feed_dict={image_tensor: image_np_expanded})
-    print('framtime:',time.time()-t1)
+    #print('frametime:',time.time()-t1)
     # Visualization of the results of a detection.
     #print('BOXES:',list(zip(*boxes,*classes)))
     #print('BOXES:',list(zip(*boxes,*classes)))
