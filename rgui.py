@@ -1,8 +1,8 @@
 import tflib
 import tkinter as tk
-import os, threading, queue, time #stdlib
+import os, threading, queue, time, copy #stdlib
 from multiprocessing.dummy import Queue
-from PIL import ImageTk, Image
+from PIL import ImageTk, Image, ImageDraw, ImageFont
 from tkinter import filedialog, font
 import numpy as np
 
@@ -14,13 +14,17 @@ def updatethread(self):
     '''update main image with analyzed image once analysis is complete'''
     while True:       
         #print("updatethread")
-        newimg = self.framequeue.get()       
-        #analyze current image:
-        #self.tfimg = Image.fromarray(newimg)#np.rollaxis(newimg, 0,3))
-        self.tfimg = newimg
+        image_np, boxes, classes, scores = self.framequeue.get()  
+        img = tflib.draw_measurements(image_np,boxes,classes,scores)
+        image_np = img[0] 
+        bboxes = img[1]
+        self.tfimg = Image.fromarray(np.uint8(image_np)).convert('RGB')
         self.tfimg.thumbnail(self.VIDSIZE,Image.ANTIALIAS)
         self.tfimg = ImageTk.PhotoImage(self.tfimg)
         self.mainimg = self.tfimg
+        self.origimg = image_np
+        print('\n\n------------\nIDS: ',id(self.origimg), id(self.mainimg), id(self.tfimg))
+        self.bboxes = bboxes
         self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
         #TODO TRY MOVING JUST THE LAST STATEMENT INTO MAIN THREAD
 
@@ -105,10 +109,13 @@ class VIDEOBOX(object):
         self.mainimg = Image.new('RGB', self.VIDSIZE)
         self.mainimg = ImageTk.PhotoImage(self.mainimg)
 
+        self.origimg = None
+        self.bboxes = None
+
         self.videolabel = tk.Label(self.videoframe, image=self.mainimg)#text="IMAGE OR VIDEO NOT YET LOADED")#image=img)
         self.videolabel.pack(side=tk.TOP)
         self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
-
+        self.videolabel.bind("<Button-1>", self.mouse_function)
 
 class GUI(object):
     '''the main GUI window'''
@@ -124,6 +131,7 @@ class GUI(object):
 
         self.bfont = font.Font(family='Helvetica', size=12, weight='bold')
         self.pfont = font.Font(family='Helvetica', size=12)
+        self.mfont = ImageFont.truetype(font='roboto.ttf', size=18)
 
         self.leftframe = tk.Frame(self.root,width=self.TILESIZE*5, height=self.TILESIZE*4)#, bg="#0F0"); 
         self.leftframe.pack(side=tk.LEFT)
@@ -161,6 +169,62 @@ class GUI(object):
         print('loading histpath:',path)
         self.set_image(path)
 
+    def mouse_function(self,e):
+        print('EVENT:',e,e.x,e.y)
+        print('\n\n------------\nZZZIDS: ',id(self.origimg), id(self.mainimg), id(self.tfimg))
+
+        if self.origimg:
+            image = self.origimg
+            #MOUSE POSITION RELATIVE TO IMAGE
+            print('vs',self.VIDSIZE)
+            dispwidth = self.mainimg.width() #width of scaled image on screen
+            dispheight = self.mainimg.height()
+            scale = image.size[0] / dispwidth
+            print('iw, dw, s', image.size[0],dispwidth,scale)
+            offsetx = (self.VIDSIZE[0] - dispwidth)/2
+            offsety = (self.VIDSIZE[1] - dispheight)/2
+            rx = e.x - offsetx
+            ry = e.y - offsety
+            print('rx,ry',rx,ry,offsetx,offsety)
+            rx *= scale
+            ry *= scale
+            print('scaled rx,ry',rx,ry)
+            
+            #---------------------------
+            newimg = copy.copy(image)
+            draw = ImageDraw.Draw(newimg)
+            for box in self.bboxes:
+                print('BOX:',box)
+                xpos,ypos,x2pos,y2pos = box
+                if (xpos < rx < x2pos) and (ypos < ry < y2pos):
+                    print("IN BBOX!")
+                    display_str = 'SIZE: %.0fx%.0f CM' %(x2pos-xpos, y2pos-ypos)
+                    text_width, text_height = self.mfont.getsize(display_str)
+                    #margin = np.ceil(0.05 * text_height)
+                    '''
+                    draw.rectangle([
+                                    (xpos, ypos),
+                                    (x2pos, y2pos),
+                                ], 
+                                    fill='#F005')
+                    '''
+                    draw.rectangle([
+                            (xpos, ypos),
+                            (xpos + text_width, ypos + text_height+4),
+                        ], 
+                            fill='red')
+                    draw.line([(xpos,ypos), (xpos, y2pos), (x2pos, y2pos),
+                        (x2pos, ypos), (xpos, ypos)], width=7, fill='#F00')
+                    display_str = 'SIZE: %.0fx%.0f CM' %(x2pos-xpos, y2pos-ypos)
+                    text_width, text_height = self.mfont.getsize(display_str)
+                    margin = np.ceil(0.05 * text_height)
+                    draw.text((xpos, ypos), display_str, fill='white', font=self.mfont)
+
+            newimg.thumbnail(self.VIDSIZE,Image.ANTIALIAS)
+            self.mainimg=ImageTk.PhotoImage(newimg)
+            
+            self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
+            
     def set_image(self,fname):
         '''set an image to the main window from a filepath to image'''
         openedimg = Image.open(fname)
@@ -170,6 +234,7 @@ class GUI(object):
         self.mainimg = ImageTk.PhotoImage(self.mainimg)
         self.rawimg = self.mainimg
         self.videolabel.configure(image=self.mainimg, width=self.VIDSIZE[0], height=self.VIDSIZE[1])
+
     def clear_queues(self):
         for q in [self.tque,self.framequeue]:
             q.mutex.acquire()

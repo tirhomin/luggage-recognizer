@@ -1,21 +1,23 @@
 '''process video file to detect and measure luggage carried by people in video'''
-import os, sys, time, threading, cv2
+import os, sys, time, threading, platform, cv2
 import tensorflow as tf
 import numpy as np
 from collections import defaultdict
 from multiprocessing.dummy import Queue
 
-#for our OSX config
-sys.path.append("newenv/lib/python3.6/site-packages/tensorflow/models/object_detection")
+operatingsystem = platform.system()
+if operatingsystem=='Darwin':
+    #for our OSX config
+    sys.path.append("newenv/lib/python3.6/site-packages/tensorflow/models/object_detection")
+elif operatingsystem=='Linux':
+    #for our Linux config
+    sys.path.append("newenv/lib/python3.5/site-packages/tensorflow/models/object_detection")
+else:
+    print('ERROR: virtualenv not found?')
 
-#for our Linux config
-#sys.path.append("newenv/lib/python3.5/site-packages/tensorflow/models/object_detection")
 from utils import label_map_util
 from utils import visualization_utils as vis_util
-
-import PIL.Image as Image
-import PIL.ImageDraw as ImageDraw
-import PIL.ImageFont as ImageFont
+from PIL import ImageTk, Image, ImageDraw, ImageFont
 
 #MODEL_NAME =  'ssd_inception_v2_coco_11_06_2017'  
 MODEL_NAME =  'ssd_mobilenet_v1_coco_11_06_2017'
@@ -44,7 +46,7 @@ def draw_measurements(frame, boxes, classes, scores):
     # Reverse list and print from bottom to top.
     #print('boxes:',boxes)
     labels = {1.0:'person', 27.0:'backpack', 31.0:'handbag', 33.0:'suitcase', 3.0:'car'}
-
+    bboxes = list()
     for group in zip(*boxes,*classes,*scores):#boxes[0]:
         box = group[0]
         score = group[-1]
@@ -56,6 +58,9 @@ def draw_measurements(frame, boxes, classes, scores):
             x2pos = box[3] * im_width
             y2pos = box[2] * im_height
 
+            bboxes.append((xpos,ypos,x2pos,y2pos))
+
+            '''
             display_str = 'SIZE: %.0fx%.0f CM' %(x2pos-xpos, y2pos-ypos)
             text_width, text_height = mfont.getsize(display_str)
             margin = np.ceil(0.05 * text_height)
@@ -64,10 +69,12 @@ def draw_measurements(frame, boxes, classes, scores):
                             (xpos + text_width, ypos + text_height),
                         ], 
                             fill='red')
+
             draw.text((xpos, ypos), display_str, fill='white', font=mfont)
+            '''
             #text_bottom -= text_height - 2 * margin
     
-    return image
+    return (image,bboxes)
 
 def process_frame(frame,sess,detection_graph):
     '''detect objects in video frame'''
@@ -106,9 +113,10 @@ def process_frame(frame,sess,detection_graph):
         if g[-1]>=0.5:
             print('%.1f %.1f %.1f %.1f %s %s' %(*g[0],labels[g[-2]] if g[-2] in labels else 'unknown', str(g[-1])))
     #'''
-    image_np = draw_measurements(image_np,boxes,classes,scores)
+    return (image_np, boxes, classes, scores)
+    #image_np = draw_measurements(image_np,boxes,classes,scores)
     #if doing above, return image_np, not Image.fromarray as below
-    return Image.fromarray(np.uint8(image_np)).convert('RGB')
+    #return Image.fromarray(np.uint8(image_np)).convert('RGB')
 
 def cvworker(que,commandqueue,framequeue=None,cpulimit=False):
     '''fetch frames from video file and put them into queue to send to tensorflow worker thread'''
