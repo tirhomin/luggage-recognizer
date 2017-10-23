@@ -17,7 +17,7 @@ else:
 
 from utils import label_map_util
 from utils import visualization_utils as vis_util
-from PIL import ImageTk, Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 #MODEL_NAME =  'ssd_inception_v2_coco_11_06_2017'  
 MODEL_NAME =  'ssd_mobilenet_v1_coco_11_06_2017'
@@ -60,7 +60,7 @@ def draw_measurements(frame, boxes, classes, scores):
 
             bboxes.append((xpos,ypos,x2pos,y2pos))
 
-            '''
+            
             display_str = 'SIZE: %.0fx%.0f CM' %(x2pos-xpos, y2pos-ypos)
             text_width, text_height = mfont.getsize(display_str)
             margin = np.ceil(0.05 * text_height)
@@ -71,7 +71,7 @@ def draw_measurements(frame, boxes, classes, scores):
                             fill='red')
 
             draw.text((xpos, ypos), display_str, fill='white', font=mfont)
-            '''
+            
             #text_bottom -= text_height - 2 * margin
     
     return (image,bboxes)
@@ -145,7 +145,7 @@ def cvworker(que,commandqueue,framequeue=None,cpulimit=False):
             else:
                 cap.release()
 
-def tfworker(que,framequeue,cpulimit=False):
+def tfworker(que,framequeue,cpulimit=False,cpus=1):
     ''' fetch video frames from queue and send them to object detector function,
     adding the processed result to the output frames queue, to be displayed to the user'''
     s=time.time()
@@ -160,7 +160,7 @@ def tfworker(que,framequeue,cpulimit=False):
             if cpulimit:
                 config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=1, \
                                         allow_soft_placement=True, 
-                                        device_count = {'CPU': 1})
+                                        device_count = {'CPU': cpus})
                 sess = tf.Session(graph=detection_graph,config=config)
             else:
                 sess = tf.Session(graph=detection_graph)
