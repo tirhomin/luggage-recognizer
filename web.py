@@ -55,18 +55,28 @@ def data():
     '''accept AJAX request containing webcam image, respond with processed image'''
     process that image
     for f,fo in request.files.items():
-        print('RF:', f, request.files[f])
+        #print('RF:', f, request.files[f])
+        #decode base64 jpeg from client request, convert to PIL Image
         x = Image.open(io.BytesIO(base64.b64decode(fo.read())))
 
+        #convert image to numpy array and insert into tensorflow queue
         arr = load_image_into_numpy_array(x)
         tfque.put(arr)
+
+        #get the next available processed frame from the output queue
+        #note this may not be the image we inserted into the tensorflow queue
+        #that image may still be awaiting processing, this image is instead simply
+        #the next available one, which may have been processed some milliseconds ago
         quedata = outqueue.get()
         out = io.BytesIO()
         quedata.save(out,format='jpeg')
         
+        #convert to base64 to respond to client 
         data=out.getvalue()
         out.close()
         data = base64.b64encode(data)
+
+        #add data type so the browser can simply render the base64 data as an image on a canvas
         imdata="data:image/jpeg;base64,"+data.decode('ascii')
         return imdata
     
