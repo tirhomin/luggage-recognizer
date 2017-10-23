@@ -7,22 +7,21 @@ from PIL import Image, ImageOps
 from queue import LifoQueue, Queue
 import io, time, codecs, base64, numpy
 import tflib, threading, queue, time
-
 app = Flask(__name__)
 
 def load_image_into_numpy_array(image):
+    '''convert PIL image data into numpy array for manipulation by TensorFlow'''
     (im_width, im_height) = image.size
     return numpy.array(image.getdata()).reshape((im_height, im_width, 3)).astype(numpy.uint8)
 
 def imagehandler(framequeue,outqueue):
-    '''update main image with analyzed image once analysis is complete'''
+    '''take numpy array of webcam image and process with tensorflow to
+    detect objects and take measurements, add results to output queue'''
     while True:
         image_np, boxes, classes, scores = framequeue.get()  
         img = tflib.draw_measurements(image_np,boxes,classes,scores)
         output = Image.fromarray(numpy.uint8(img[0])).convert('RGB')
         outqueue.put(output)
-        #return output
-        #output.save('output.jpg')
 
 #only store up to 3 frames so as not to get overwhelmed, dropped frames are fine
 #network latency means frames will be dropped anyway, negating the usefulness of GPU
@@ -31,20 +30,30 @@ tfque = Queue(maxsize=3) #queue for frames being sent to the neural net
 framequeue = Queue(maxsize=3) #processed frames coming out of the neural net
 outqueue = Queue(maxsize=3) #final labelled images to show user
 
+#use only 3 of our 4 CPUs for tensorflow 
+#so the web server remains responsive on the 4th CPU
 cpulimit, cpus = True, 3
+
+#tthread is the tensorflow thread
 tthread = threading.Thread(target=tflib.tfworker,args=(tfque,framequeue,cpulimit,cpus))
 tthread.daemon = True
 tthread.start()
 
+#updatethread is fetching images from input queue, feeding them to tensorflow thread
+#and then adding the results to an output queue for return to the client
 updatethread = threading.Thread(target=imagehandler,args=(framequeue,outqueue))
 updatethread.daemon = True
 updatethread.start()  
 
 @app.route("/")
-def home(): return render_template('demo5.html')
+def home():
+    '''main page / Web UI for webcam'''
+    return render_template('demo5.html')
 
 @app.route("/data", methods = ['GET', 'POST'])
 def data():
+    '''accept AJAX request containing webcam image, respond with processed image'''
+    process that image
     for f,fo in request.files.items():
         print('RF:', f, request.files[f])
         x = Image.open(io.BytesIO(base64.b64decode(fo.read())))
@@ -61,8 +70,11 @@ def data():
         imdata="data:image/jpeg;base64,"+data.decode('ascii')
         return imdata
     
-    return imdata
+    return 'no webcam image provided'
 
+#debug server which auto-reloads for live changes during development
 #app.run(debug=True, port=8000, host='0.0.0.0')
+
+#run the server with gevent to support multiple clients on AWS
 server = WSGIServer(("0.0.0.0", 8000), app)
 server.serve_forever()
