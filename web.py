@@ -6,9 +6,11 @@ from flask import Flask, request, render_template
 from PIL import Image, ImageOps
 from queue import LifoQueue, Queue
 import io, time, codecs, base64, numpy
-import tflib, threading, queue, time
+import threading, queue, time
+from marvis import torchlib as nnlib
 app = Flask(__name__)
-
+import os
+print('OS1:',os.getcwd())
 def load_image_into_numpy_array(image):
     '''convert PIL image data into numpy array for manipulation by TensorFlow'''
     (im_width, im_height) = image.size
@@ -18,9 +20,15 @@ def imagehandler(framequeue,outqueue):
     '''take numpy array of webcam image and process with tensorflow to
     detect objects and take measurements, add results to output queue'''
     while True:
-        image_np, boxes, classes, scores = framequeue.get()  
-        img = tflib.draw_measurements(image_np,boxes,classes,scores)
-        output = Image.fromarray(numpy.uint8(img[0])).convert('RGB')
+        #these three lines for tensorflow version
+        #image_np, boxes, classes, scores = framequeue.get()  
+        #img = nnlib.draw_measurements(image_np,boxes,classes,scores)
+        #output = Image.fromarray(numpy.uint8(img[0])).convert('RGB')
+        
+        #these two lines for pytorch version
+        image_np = framequeue.get()
+        output = Image.fromarray(numpy.uint8(image_np)).convert('RGB')
+       
         outqueue.put(output)
 
 #only store up to 3 frames so as not to get overwhelmed, dropped frames are fine
@@ -34,8 +42,14 @@ outqueue = Queue(maxsize=3) #final labelled images to show user
 #so the web server remains responsive on the 4th CPU
 cpulimit, cpus = True, 3
 
-#tthread is the tensorflow thread
-tthread = threading.Thread(target=tflib.tfworker,args=(tfque,framequeue,cpulimit,cpus))
+#tthread is the tensorflow or torch thread
+
+#FASTEST & LOWEST ACCURACY
+#wkrconfig={'cfgfile':'marvis/cfg/tiny-yolo.cfg','weightfile':'marvis/bin/tiny-yolo.weights','cuda':0}
+
+#LESS FAST, MUCH MORE ACCURATE (plenty fast on GPU though)
+wkrconfig={'cfgfile':'marvis/cfg/yolo.cfg','weightfile':'marvis/bin/yolo.weights','cuda':0}
+tthread = threading.Thread(target=nnlib.tfworker,args=(tfque,framequeue,cpulimit,cpus,wkrconfig))
 tthread.daemon = True
 tthread.start()
 
@@ -48,12 +62,12 @@ updatethread.start()
 @app.route("/")
 def home():
     '''main page / Web UI for webcam'''
-    return render_template('demo5.html')
+    return render_template('1.5.html')
 
 @app.route("/data", methods = ['GET', 'POST'])
 def data():
     '''accept AJAX request containing webcam image, respond with processed image'''
-    process that image
+    #process that image
     for f,fo in request.files.items():
         #print('RF:', f, request.files[f])
         #decode base64 jpeg from client request, convert to PIL Image
@@ -82,9 +96,12 @@ def data():
     
     return 'no webcam image provided'
 
+@app.route('/testroute')
+def testroute():
+    return 'test route returned OK'
 #debug server which auto-reloads for live changes during development
-#app.run(debug=True, port=8000, host='0.0.0.0')
+#app.run(debug=True, port=8080, host='0.0.0.0')
 
 #run the server with gevent to support multiple clients on AWS
-server = WSGIServer(("0.0.0.0", 8000), app)
+server = WSGIServer(("0.0.0.0", 8080), app)
 server.serve_forever()

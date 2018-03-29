@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+<head>
+	<title>Luggage Recognizer</title>
+  <meta charset='utf-8'>
+<!-- ################# CSS STYLES ################## -->
+      <style type="text/css">
+        body{background-color:#ddd;}
+          #video{border: 1px solid black; box-shadow: 2px 2px 3px black; width:576px; height:432px;}
+          #photo{border: 1px solid black; box-shadow: 2px 2px 3px black; width:576px; height:432px;}
+          #canvas{display:none;}
+          .camera{width: 580px; display:inline-block;}
+          .output{width: 580px; display:inline-block;}
+          h1,h2,h3{font-weight:300;}
+          .contentarea{font-size: 16px; font-family: "Lucida Grande", "Arial", sans-serif; width: 1280px;
+                      margin:0 auto;
+                      text-align:center;
+                      padding:1ex 1ex 3em 1ex;
+                      background-color:#fff;    
+        }
+      </style>
+<script src="static/FileSaver.js"></script>
+<script src="static/jszip.min.js"></script>
+</head>
+
+<!-- ################# the web page itself / HTML ################## -->
+<body>
+    <div class="contentarea">
+      <h1>
+        Luggage Recognizer (version 1.3)
+      </h1>
+      <p>
+        Currently only Firefox (57 and below) is supported, if you don't see video, try refreshing the page
+      </p>
+      <div class="camera">
+        <video id="video">Video stream not available.</video>
+      </div>
+      <canvas id="canvas">
+      </canvas>
+      <div class="output">
+        <img id="photo" alt="The screen capture will appear in this box."> 
+      </div>
+      <br><br>
+      <a id="PAUSE" style="display:none; padding:1ex 3ex 1ex 3ex; font-size:1.5em; border:1px solid #ccc; background-color:#37C; color:white; font-weight:bold;">PAUSE</a>
+      <a id="START" style="text-decoration:underline; padding:1ex 3ex 1ex 3ex; font-size:1.5em; border:1px solid #ccc; background-color:#37C; color:white; font-weight:bold;">START</a>
+      <a id="STOP" style="padding:1ex 3ex 1ex 3ex; font-size:1.5em; border:1px solid #ccc; background-color:#37C; color:white; font-weight:bold;">STOP</a>
+      <a id="DOWNLOAD" style="padding:1ex 3ex 1ex 3ex; font-size:1.5em; border:1px solid #ccc; background-color:#37C; color:white; font-weight:bold;">DOWNLOAD</a>
+
+    </div>
+</body>
+</html>
+<script>
+// ######################   JAVASCRIPT   ########################
+(function() {
+    
+  // The width and height of the captured photo. We will set the
+  // width to the value defined here, but the height will be
+  // calculated based on the aspect ratio of the input stream.
+  var PAUSE = false;
+  var width = 400;    // We will scale the photo width to this
+  var height = 0;     // This will be computed based on the input stream
+  
+  var IMAGELIST = new Array();
+
+  function zip_and_download(){
+    var zip = new JSZip();
+    //zip.file("Hello.txt", "Hello World\n");
+    //var img = zip.folder("images");
+    //img.file("smile.jpg", bdata, {base64: true});
+
+    /*
+    var iformat = 'image/jpeg';
+    var data = canvas.toDataURL(iformat);
+    var base64PrefixLength = ('data:'+iformat+';base64,').length;
+    var bdata = data.slice(base64PrefixLength);
+    var blob = new Blob([bdata,], {type: iformat});
+    */
+    var arrlen = IMAGELIST.length;
+    for (var idx = 0; idx < arrlen; idx++) {
+    //for (var nimage in IMAGELIST) {
+      zip.file("image"+idx+".jpg",IMAGELIST[idx], {base64:true});
+    }
+    //zip.file("smile.jpg", bdata, {base64: true});
+    zip.generateAsync({type:"blob"})
+    .then(function(content) {
+        // see FileSaver.js
+        saveAs(content, "luggage-data.zip");
+    });
+  }
+
+  // |streaming| indicates whether or not we're currently streaming
+  // video from the camera. Obviously, we start at false.
+
+  var streaming = false;
+
+  // The various HTML elements we need to configure or control. These
+  // will be set by the startup() function.
+
+  var video = null;
+  var canvas = null;
+  var photo = null;
+  var startbutton = null;
+  var LOCK = false; 
+  var OUTSTANDING_FRAMES = 0;
+  //TODO, note, LOCK is just a temporary hack to wait on async calls
+  //so that essentially we are pretending to be synchronous;
+  //in the longer term, we will run async + buffer and sort the
+  //buffer as new frames come in so that things are a little more fluid
+  //and faster
+
+  function pausehandler(){
+    if(PAUSE){
+      video.play();
+      PAUSE = false; 
+      LOCK = false;
+      pbtn = document.getElementById('PAUSE').firstChild;
+      pbtn.nodeValue = "PAUSE";
+      console.log('unpaused');
+    }
+    else{
+      video.pause();
+      //takepicture();
+      PAUSE = true; 
+      pbtn = document.getElementById('PAUSE').firstChild;
+      pbtn.nodeValue = "UNPAUSE";
+      console.log('paused');
+    }
+    return 1;}
+
+  function starthandler(e){
+    IMAGELIST.length=0;
+    video.play();
+    PAUSE=false; LOCK = false; 
+    startbtn = document.getElementById('START');
+    startbtn.style.textDecoration='underline';
+    stopbtn = document.getElementById('STOP');
+    stopbtn.style.textDecoration='none';
+
+    console.log('starthandler clicked');
+  }
+  function stophandler(e){
+    video.pause();
+    PAUSE = true;
+    startbtn = document.getElementById('START');
+    startbtn.style.textDecoration='none';
+    stopbtn = document.getElementById('STOP');
+    stopbtn.style.textDecoration='underline';
+    console.log('stophandler clicked');
+  }
+
+  function downloadhandler(e){
+    zip_and_download();
+  }
+
+  function startup() {
+      console.log('inside startup function');
+    pbtn = document.getElementById('PAUSE');
+    pbtn.addEventListener('click', pausehandler, false);    
+    document.getElementById('START').addEventListener('click', starthandler, false);    
+    document.getElementById('STOP').addEventListener('click', stophandler, false);
+    document.getElementById('DOWNLOAD').addEventListener('click', downloadhandler, false);
+
+    video = document.getElementById('video');
+    canvas = document.getElementById('canvas');
+    photo = document.getElementById('photo');
+    startbutton = document.getElementById('startbutton');
+
+    navigator.getMedia = ( navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+    navigator.getMedia({video: true,audio: false},
+      function(stream) {
+        if (navigator.mozGetUserMedia) {video.mozSrcObject = stream;}
+        else {
+          var vendorURL = window.URL || window.webkitURL;
+          video.src = vendorURL.createObjectURL(stream);
+        }
+        video.play();
+      },
+      function(err) {console.log("An error occured! " + err);}
+    );
+
+    video.addEventListener('canplay', function(ev){
+      if (!streaming) {
+        height = video.videoHeight / (video.videoWidth/width);     
+        // Firefox currently has a bug where the height can't be read from
+        // the video, so we will make assumptions if this happens.
+        if (isNaN(height)) {height = width / (4/3);}
+        video.setAttribute('width', width);
+        video.setAttribute('height', height);
+        canvas.setAttribute('width', width);
+        canvas.setAttribute('height', height);
+        streaming = true;
+      }
+    }, false);
+
+    window.setInterval(function(){takepicture();},200)
+    //note, code is currently synchronous, 100ms will
+    //probably only be hit by east coast US users, otherwise
+    //network latency means they wont have heard back on last request in
+    //the 100ms
+
+
+    clearphoto();
+  }//END OF STARTUP FUNCTION
+
+  // Fill the photo with an indication that none has been captured.
+  // perhaps unnecessary now and can probably be deleted
+  function clearphoto() {
+    var context = canvas.getContext('2d');
+    context.fillStyle = "#AAA";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  // SEND IMAGE TO SERVER, GET RESPONSE IMAGE, DISPLAY IMAGE
+  function sendPic(blob) {
+        if(!LOCK && OUTSTANDING_FRAMES<3){
+            //console.log('sending pic');
+            OUTSTANDING_FRAMES += 1;
+            if (OUTSTANDING_FRAMES >= 3){LOCK = true;}
+            var data = new FormData();
+            data.append("imagefile", blob, ("camera.png"));
+            var oReq = new XMLHttpRequest();
+            oReq.open("POST", "/data");
+            oReq.send(data);
+            oReq.onload = function(oEvent) {
+                if (oReq.status == 200) {
+                    //console.log("Uploaded");
+                    //console.log(oReq.response);
+                    OUTSTANDING_FRAMES -= 1;
+                    LOCK = false;
+                    //pause is down here so that we decrement the counter when we receive the frame,
+                    //but dont update the window so it stays "paused"
+                    if(PAUSE){return 0;}
+                    else{
+                      //HANDLE INCOMING PHOTO
+                      photo.setAttribute('src', oReq.response);
+                      //formatting stuff, server expects this format for now
+                      var base64PrefixLength = ('data:image/jpeg;base64,').length;
+                      var bdata = oReq.response.slice(base64PrefixLength);
+                      
+                      //add image to list, which will be zipped up as individual images when user clicks 'download'
+                      IMAGELIST.push(bdata);
+
+                    }
+                } else {
+                    //console.log("Error " + oReq.status + " occurred uploading your file.");
+                    LOCK = false;
+                }
+            };
+
+        }
+        else{
+          //console.log('locked');
+        }
+    }
+
+  // TAKE A PHOTO FROM WEBCAM; 
+  // SEND WEBCAM IMAGE TO SERVER;
+  // WAIT FOR RESPONSE WITH A PROCESSED IMAGE;
+  // UPDATE CANVAS WITH THAT IMAGE
+  // IF NO PHOTO WAS CAPTURED, CLEAR THE FRAME TO SHOW USER IT IS FROZEN / WEBCAM FAILURE
+  function takepicture() {
+    if(PAUSE){console.log('doing nothing while paused'); return 0;}
+    else{
+        console.log('not paused, proceeding');
+    }
+    var context = canvas.getContext('2d');
+    if (width && height) {
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(video, 0, 0, width, height);
+    
+      //formatting stuff, server expects this format for now
+      var iformat = 'image/jpeg';
+      var data = canvas.toDataURL(iformat);
+      var base64PrefixLength = ('data:'+iformat+';base64,').length;
+      var bdata = data.slice(base64PrefixLength);
+      
+      var blob = new Blob([bdata,], {type: iformat});
+      sendPic(blob);
+
+    } else {
+      clearphoto();
+    }
+  }
+
+  window.addEventListener('load', startup, false);
+
+
+
+})();
+
+</script>
